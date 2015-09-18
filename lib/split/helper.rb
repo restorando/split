@@ -40,6 +40,19 @@ module Split
       ab_user.delete(experiment.key)
     end
 
+    def exclude_current_participant
+      ab_user.keys.each do |key|
+        key_without_version = key.split(/\:\d(?!\:)/)[0]
+        Metric.possible_experiments(key_without_version).each do |experiment|
+          if !experiment.has_winner?
+            alternative = experiment.alternatives.find{|a| a.name == ab_user[key] }
+            alternative.decrement_participation
+            ab_user.delete(key)
+          end
+        end
+      end
+    end
+
     def finish_experiment(experiment, options = {:reset => true})
       return true if experiment.has_winner?
       should_reset = experiment.resettable? && options[:reset]
