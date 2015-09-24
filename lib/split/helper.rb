@@ -9,7 +9,7 @@ module Split
         alternative = if Split.configuration.enabled
           experiment.save
           trial = Trial.new(:user => ab_user, :experiment => experiment,
-              :override => override_alternative(experiment.name), :exclude => exclude_visitor?,
+              :override => override_alternative(experiment.name), :exclude => exclude_visitor?(experiment),
               :disabled => split_generically_disabled?)
           alt = trial.choose!(self)
           alt ? alt.name : nil
@@ -60,12 +60,13 @@ module Split
     end
 
     def finished(metric_descriptor, options = {:reset => true})
-      return if exclude_visitor? || Split.configuration.disabled?
+      return if Split.configuration.disabled?
       metric_descriptor, goals = normalize_metric(metric_descriptor)
       experiments = Metric.possible_experiments(metric_descriptor)
 
       if experiments.any?
         experiments.each do |experiment|
+          next if exclude_visitor?(experiment)
           finish_experiment(experiment, options.merge(:goals => goals))
         end
       end
@@ -92,12 +93,38 @@ module Split
       alternative_name
     end
 
+    # alternative can be either a string or an array of strings
+    def ensure_alternative_or_exclude(experiment_name, alternatives)
+      return if @alternative_ensured
+      alternatives = Array(alternatives)
+
+      # if ab_user was not called before, then force the alternative and manually increment the counter.
+      unless experiment = ExperimentCatalog.find(experiment_name)
+        ab_user[experiment_name] = default_alternative = alternatives.first
+        Split::Alternative.new(default_alternative, experiment_name).increment_participation
+        @alternative_ensured = true
+        return
+      end
+
+      current_alternative = ab_user[experiment.key]
+
+      return if exclude_visitor?(experiment) || alternatives.include?(current_alternative)
+
+      Split::Alternative.new(current_alternative, experiment.key).decrement_participation
+      params[experiment_name] = alternatives.sample
+      exclude_visitor(experiment)
+    end
+
+    def exclude_visitor(experiment)
+      ab_user[experiment.excluded_key] = true
+    end
+
     def ab_user
       @ab_user ||= Split::Persistence.adapter.new(self)
     end
 
-    def exclude_visitor?
-      instance_eval(&Split.configuration.ignore_filter) || is_ignored_ip_address? || is_robot?
+    def exclude_visitor?(experiment)
+      instance_eval(&Split.configuration.ignore_filter) || is_ignored_ip_address? || is_robot? || ab_user[experiment.excluded_key]
     end
 
     def is_robot?
@@ -118,7 +145,7 @@ module Split
       ab_user.keys.each do |key|
         key_without_version = key.split(/\:\d(?!\:)/)[0]
         Metric.possible_experiments(key_without_version).each do |experiment|
-          if !experiment.has_winner?
+          if !experiment.has_winner? and !ab_user.keys.include?(experiment.excluded_key)
             experiment_pairs[key_without_version] = ab_user[key]
           end
         end
