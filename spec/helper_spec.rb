@@ -601,7 +601,7 @@ describe Split::Helper do
 
       before { ab_test('link_color', 'blue', 'red', 'black') }
 
-      it 'should decrement the counter if the none of the desired alternatives are the current' do
+      it 'should decrement the counter if none of the desired alternatives are the current' do
         expect(Split::Alternative.new(other_alternatives.first, 'link_color').participant_count).to eq(0)
         expect(Split::Alternative.new(other_alternatives.last, 'link_color').participant_count).to eq(0)
         expect(Split::Alternative.new(current_alternative, 'link_color').participant_count).to eq(1)
