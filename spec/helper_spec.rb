@@ -737,7 +737,7 @@ describe Split::Helper do
       it "creates the experiment and excludes the user" do
         ensure_alternative_or_exclude('link_color', 'red')
         expect(ab_test('link_color', 'red', 'blue')).to eq('red')
-        expect(ab_user['link_color:excluded']).to eq(true)
+        expect(ab_user['link_color:excluded']).to be true
 
         expect(Split::Alternative.new('red', 'link_color').participant_count).to eq(0)
         expect(Split::Alternative.new('blue', 'link_color').participant_count).to eq(0)
