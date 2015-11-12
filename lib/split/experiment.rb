@@ -230,10 +230,6 @@ module Split
       "#{key}:finished"
     end
 
-    def excluded_key
-      "#{key}:excluded"
-    end
-
     def metadata_key
       "#{name}:metadata"
     end
